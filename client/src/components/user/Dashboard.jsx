@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Search, Filter, Star, MapPin, Clock, DollarSign, Calendar, Heart, Users, Award, Map } from 'lucide-react';
+import { Search, Filter, Star, MapPin, Clock, DollarSign, Calendar, Heart, Users, Award, Map, X, Plus, Minus, CreditCard } from 'lucide-react';
 import './Dashboard.css'; // Import the custom CSS file
 
 const Dashboard = ({ user }) => {
@@ -17,6 +17,27 @@ const Dashboard = ({ user }) => {
 
   // Dynamic specialties based on actual trainer data
   const [specialties, setSpecialties] = useState([]);
+
+  // Booking modal state
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedTrainer, setSelectedTrainer] = useState(null);
+  const [bookingData, setBookingData] = useState({
+    sessionType: 'single',
+    sessions: [{
+      type: 'Personal Training',
+      sessionType: 'in-person',
+      duration: 60,
+      date: '',
+      time: ''
+    }],
+    paymentMethod: 'credit_card',
+    notes: '',
+    specialRequests: ''
+  });
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingError, setBookingError] = useState('');
+
+
 
   useEffect(() => {
     fetchTrainers();
@@ -362,12 +383,39 @@ const Dashboard = ({ user }) => {
     return matchesSearch && matchesSpecialty && matchesPrice;
   });
 
-  const handleBookSession = async (trainerId) => {
+const handleBookSession = async (trainerId) => {
     try {
-      // Navigate to booking page or open booking modal
-      alert(`Booking session with trainer ${trainerId}. This would open the booking interface.`);
+      // Find the trainer
+      const trainer = trainers.find(t => t._id === trainerId);
+      if (!trainer) {
+        setError('Trainer not found');
+        return;
+      }
+
+      // Set selected trainer and reset booking data
+      setSelectedTrainer(trainer);
+      const defaultServiceName = trainer.services && trainer.services.length > 0 
+        ? trainer.services[0].name 
+        : 'Personal Training';
+
+      setBookingData({
+        sessionType: 'single',
+        sessions: [{
+          type: defaultServiceName,
+          sessionType: 'in-person',
+          duration: 60,
+          date: '',
+          time: ''
+        }],
+        paymentMethod: 'credit_card',
+        notes: '',
+        specialRequests: ''
+      });
+      setBookingError('');
+      setShowBookingModal(true);
     } catch (error) {
       console.error('Error initiating booking:', error);
+      setError('Error opening booking interface');
     }
   };
 
@@ -380,6 +428,108 @@ const Dashboard = ({ user }) => {
     }
   };
 
+
+  // Booking modal functions
+  const addSession = () => {
+    if (bookingData.sessions.length < 10) { // Limit to 10 sessions
+      const defaultServiceName = selectedTrainer.services && selectedTrainer.services.length > 0 
+        ? selectedTrainer.services[0].name 
+        : 'Personal Training';
+
+      setBookingData(prev => ({
+        ...prev,
+        sessions: [...prev.sessions, {
+          type: defaultServiceName,
+          sessionType: 'in-person',
+          duration: 60,
+          date: '',
+          time: ''
+        }]
+      }));
+    }
+  };
+
+  const removeSession = (index) => {
+    if (bookingData.sessions.length > 1) {
+      setBookingData(prev => ({
+        ...prev,
+        sessions: prev.sessions.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  const updateSession = (index, field, value) => {
+    setBookingData(prev => ({
+      ...prev,
+      sessions: prev.sessions.map((session, i) => 
+        i === index ? { ...session, [field]: value } : session
+      )
+    }));
+  };
+
+  const calculateTotalPrice = () => {
+    if (!selectedTrainer || !selectedTrainer.services) return 0;
+    
+    return bookingData.sessions.reduce((total, session) => {
+      // Find the specific service selected for this session
+      const selectedService = selectedTrainer.services.find(service => service.name === session.type);
+      const servicePrice = selectedService ? selectedService.price : getHourlyRate(selectedTrainer.services);
+      return total + (servicePrice * (session.duration / 60));
+    }, 0);
+  };
+
+  const handleBookingSubmit = async (e) => {
+    e.preventDefault();
+    setBookingLoading(true);
+    setBookingError('');
+
+    try {
+      // Validate all sessions have dates and times
+      for (let i = 0; i < bookingData.sessions.length; i++) {
+        const session = bookingData.sessions[i];
+        if (!session.date || !session.time) {
+          setBookingError(`Please set date and time for session ${i + 1}`);
+          setBookingLoading(false);
+          return;
+        }
+      }
+
+      // Prepare booking data for API
+      const bookingPayload = {
+        trainerId: selectedTrainer.userId || selectedTrainer._id,
+        sessionType: bookingData.sessionType,
+        sessions: bookingData.sessions.map(session => ({
+          type: session.type, // Use the service name selected by user
+          duration: session.duration,
+          date: new Date(`${session.date}T${session.time}`).toISOString()
+        })),
+        paymentMethod: bookingData.paymentMethod,
+        notes: bookingData.notes,
+        specialRequests: bookingData.specialRequests
+      };
+
+      const response = await axios.post('/bookings', bookingPayload);
+
+      if (response.data.success) {
+        alert('Booking created successfully! The trainer will be notified and you will receive a confirmation email.');
+        setShowBookingModal(false);
+        setSelectedTrainer(null);
+      } else {
+        setBookingError(response.data.message || 'Failed to create booking');
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      setBookingError(error.response?.data?.message || 'Failed to create booking. Please try again.');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const formatDateTime = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return '';
+    return new Date(`${dateStr}T${timeStr}`).toLocaleString();
+  };
+  
   return (
     <div className="dashboard-container">
       {/* Hero Section */}
@@ -666,9 +816,6 @@ const Dashboard = ({ user }) => {
                     >
                       Book Session
                     </button>
-                    <button className="btn-calendar">
-                      <Calendar />
-                    </button>
                   </div>
                 </div>
               </div>
@@ -684,6 +831,268 @@ const Dashboard = ({ user }) => {
           </div>
         )}
       </div>
+ {/* Booking Modal */}
+      {showBookingModal && selectedTrainer && (
+        <div className="modal-overlay" onClick={() => setShowBookingModal(false)}>
+          <div className="modal-content booking-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Book Session with {selectedTrainer.name}</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setShowBookingModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="trainer-summary">
+              <img 
+                src={getTrainerImage(selectedTrainer._id, selectedTrainer.name)}
+                alt={selectedTrainer.name}
+                className="trainer-modal-image"
+              />
+              <div className="trainer-modal-info">
+                <h3>{selectedTrainer.name}</h3>
+                <p className="specialization">{selectedTrainer.specialization}</p>
+                <div className="rating">
+                  <Star size={16} fill="gold" color="gold" />
+                  {calculateAverageRating(selectedTrainer.rating)}
+                </div>
+                <p className="rate">${getHourlyRate(selectedTrainer.services)}/hour</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleBookingSubmit} className="booking-form">
+              {/* Session Type */}
+              <div className="form-group">
+                <label>Session Type</label>
+                <select
+                  value={bookingData.sessionType}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, sessionType: e.target.value }))}
+                  className="form-select"
+                >
+                  <option value="single">Single Session</option>
+                  <option value="package">Package (Multiple Sessions)</option>
+                </select>
+              </div>
+
+              {/* Sessions */}
+              <div className="sessions-section">
+                <div className="section-header">
+                  <h4>Session Details</h4>
+                  {bookingData.sessionType === 'package' && (
+                    <button
+                      type="button"
+                      onClick={addSession}
+                      className="btn-add-session"
+                      disabled={bookingData.sessions.length >= 10}
+                    >
+                      <Plus size={16} /> Add Session
+                    </button>
+                  )}
+                </div>
+
+                {bookingData.sessions.map((session, index) => (
+                  <div key={index} className="session-item">
+                    <div className="session-header">
+                      <h5>Session {index + 1}</h5>
+                      {bookingData.sessions.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeSession(index)}
+                          className="btn-remove-session"
+                        >
+                          <Minus size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="session-fields">
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Service</label>
+                          <select
+                            value={session.type}
+                            onChange={(e) => updateSession(index, 'type', e.target.value)}
+                            className="form-select"
+                          >
+                            {selectedTrainer.services && selectedTrainer.services.length > 0 ? (
+                              selectedTrainer.services.map((service, serviceIndex) => (
+                                <option key={serviceIndex} value={service.name}>
+                                  {service.name} - ${service.price}/hr
+                                </option>
+                              ))
+                            ) : (
+                              <option value="Personal Training">Personal Training</option>
+                            )}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Session Type</label>
+                          <select
+                            value={session.sessionType}
+                            onChange={(e) => updateSession(index, 'sessionType', e.target.value)}
+                            className="form-select"
+                          >
+                            <option value="in-person">In-Person</option>
+                            <option value="virtual">Virtual</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Duration (minutes)</label>
+                          <select
+                            value={session.duration}
+                            onChange={(e) => updateSession(index, 'duration', parseInt(e.target.value))}
+                            className="form-select"
+                          >
+                            <option value={30}>30 minutes</option>
+                            <option value={45}>45 minutes</option>
+                            <option value={60}>60 minutes</option>
+                            <option value={90}>90 minutes</option>
+                            <option value={120}>2 hours</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Date</label>
+                          <input
+                            type="date"
+                            value={session.date}
+                            onChange={(e) => updateSession(index, 'date', e.target.value)}
+                            className="form-input"
+                            min={new Date().toISOString().split('T')[0]}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Time</label>
+                          <input
+                            type="time"
+                            value={session.time}
+                            onChange={(e) => updateSession(index, 'time', e.target.value)}
+                            className="form-input"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment Method */}
+              <div className="form-group">
+                <label>Payment Method</label>
+                <div className="payment-options">
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="credit_card"
+                      checked={bookingData.paymentMethod === 'credit_card'}
+                      onChange={(e) => setBookingData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                    />
+                    <CreditCard size={20} />
+                    <span>Credit Card</span>
+                  </label>
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="paypal"
+                      checked={bookingData.paymentMethod === 'paypal'}
+                      onChange={(e) => setBookingData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                    />
+                    <span>💳</span>
+                    <span>PayPal</span>
+                  </label>
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="stripe"
+                      checked={bookingData.paymentMethod === 'stripe'}
+                      onChange={(e) => setBookingData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                    />
+                    <span>💰</span>
+                    <span>Stripe</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="form-group">
+                <label>Notes (Optional)</label>
+                <textarea
+                  value={bookingData.notes}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, notes: e.target.value }))}
+                  className="form-textarea"
+                  placeholder="Any additional notes for the trainer..."
+                  rows="3"
+                />
+              </div>
+
+              {/* Special Requests */}
+              <div className="form-group">
+                <label>Special Requests (Optional)</label>
+                <textarea
+                  value={bookingData.specialRequests}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, specialRequests: e.target.value }))}
+                  className="form-textarea"
+                  placeholder="Any special requirements or requests..."
+                  rows="2"
+                />
+              </div>
+
+              {/* Price Summary */}
+              <div className="price-summary">
+                <div className="price-breakdown">
+                  {bookingData.sessions.map((session, index) => {
+                    const selectedService = selectedTrainer.services.find(service => service.name === session.type);
+                    const servicePrice = selectedService ? selectedService.price : getHourlyRate(selectedTrainer.services);
+                    return (
+                      <div key={index} className="price-item">
+                        <span>Session {index + 1} - {session.type} ({session.duration} min)</span>
+                        <span>${(servicePrice * (session.duration / 60)).toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="total-price">
+                  <strong>Total: ${calculateTotalPrice().toFixed(2)}</strong>
+                </div>
+              </div>
+
+              {bookingError && (
+                <div className="error-message" style={{ marginBottom: '1rem' }}>
+                  {bookingError}
+                </div>
+              )}
+
+              {/* Form Actions */}
+              <div className="form-actions">
+                <button
+                  type="button"
+                  onClick={() => setShowBookingModal(false)}
+                  className="btn-cancel"
+                  disabled={bookingLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-book"
+                  disabled={bookingLoading}
+                >
+                  {bookingLoading ? 'Creating Booking...' : `Book Sessions - $${calculateTotalPrice().toFixed(2)}`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
