@@ -16,6 +16,10 @@ const SessionSchema = new mongoose.Schema({
     enum: ['in-person', 'virtual'],
     required: true
   },
+  serviceType: {
+    type: String, // Service name like 'Personal Training', 'Yoga Session', etc.
+    required: false
+  },
   duration: {
     type: Number, // in minutes
     required: true,

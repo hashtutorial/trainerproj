@@ -18,6 +18,10 @@ const BookingSchema = new mongoose.Schema({
   },
   sessions: [{
     type: {
+      type: String, // Service name (e.g., "Personal Training")
+      required: true
+    },
+    sessionType: {
       type: String,
       enum: ['in-person', 'virtual'],
       required: true

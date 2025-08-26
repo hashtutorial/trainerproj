@@ -111,7 +111,8 @@ router.post('/', auth, [
   body('trainerId', 'Trainer ID is required').not().isEmpty(),
   body('sessionType', 'Session type is required').isIn(['single', 'package', 'subscription']),
   body('sessions', 'Sessions array is required').isArray({ min: 1 }),
-  body('sessions.*.type', 'Session type is required').isIn(['in-person', 'virtual']),
+  body('sessions.*.type', 'Service type is required').not().isEmpty(),
+  body('sessions.*.sessionType', 'Session delivery type is required').isIn(['in-person', 'virtual']),
   body('sessions.*.duration', 'Duration must be a number').isNumeric(),
   body('sessions.*.date', 'Session date is required').isISO8601(),
   body('paymentMethod', 'Payment method is required').isIn(['credit_card', 'paypal', 'stripe', 'cash'])
@@ -189,7 +190,8 @@ router.post('/', auth, [
       const session = new Session({
         userId: req.user.id,
         trainerId,
-        type: sessionData.type,
+        type: sessionData.sessionType, // 'in-person' or 'virtual'
+        serviceType: sessionData.type, // Service name like 'Personal Training'
         duration: sessionData.duration,
         date: new Date(sessionData.date),
         notes: notes,
