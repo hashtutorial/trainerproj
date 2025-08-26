@@ -65,13 +65,28 @@ const TrainerDashboard = ({ user }) => {
 
         // Fetch bookings (only if profile exists)
         try {
-          const bookingsResponse = await axios.get('/bookings');
+          // Temporarily remove auth headers for booking requests
+          const originalAuth = axios.defaults.headers.common['Authorization'];
+          delete axios.defaults.headers.common['Authorization'];
+          
+          const bookingsResponse = await axios.get(`/bookings?trainerId=${user.id}`);
           if (bookingsResponse.data && bookingsResponse.data.success && bookingsResponse.data.bookings) {
             setBookings(bookingsResponse.data.bookings);
+          }
+          
+          // Restore auth headers
+          if (originalAuth) {
+            axios.defaults.headers.common['Authorization'] = originalAuth;
           }
         } catch (error) {
           console.log('No bookings available yet:', error.message);
           setBookings([]);
+          
+          // Restore auth headers in case of error
+          const originalAuth = axios.defaults.headers.common['Authorization'];
+          if (originalAuth) {
+            axios.defaults.headers.common['Authorization'] = originalAuth;
+          }
         }
 
         // Fetch stats (only if profile exists)

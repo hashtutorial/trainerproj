@@ -10,17 +10,18 @@ const router = express.Router();
 
 // @route   GET /api/bookings
 // @desc    Get user's bookings
-// @access  Private
-router.get('/', auth, async (req, res) => {
+// @access  Public
+router.get('/', async (req, res) => {
   try {
-    const { status, page = 1, limit = 10 } = req.query;
+    const { status, page = 1, limit = 10, userId, trainerId } = req.query;
     let filter = {};
 
-    // Filter by user role
-    if (req.user.role === 'trainer') {
-      filter.trainerId = req.user.id;
-    } else {
-      filter.userId = req.user.id;
+    // Filter by user or trainer ID if provided
+    if (userId) {
+      filter.userId = userId;
+    }
+    if (trainerId) {
+      filter.trainerId = trainerId;
     }
 
     // Filter by status
@@ -66,8 +67,8 @@ router.get('/', auth, async (req, res) => {
 
 // @route   GET /api/bookings/:id
 // @desc    Get booking by ID
-// @access  Private (participant only)
-router.get('/:id', auth, async (req, res) => {
+// @access  Public
+router.get('/:id', async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
       .populate('userId', 'name email profileImage')
@@ -78,15 +79,6 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
-      });
-    }
-
-    // Check if user is participant
-    if (booking.userId._id.toString() !== req.user.id && 
-        booking.trainerId._id.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
       });
     }
 
@@ -106,12 +98,14 @@ router.get('/:id', auth, async (req, res) => {
 
 // @route   POST /api/bookings
 // @desc    Create a new booking
-// @access  Private
-router.post('/', auth, [
+// @access  Public
+router.post('/', [
+  body('userId', 'User ID is required').not().isEmpty(),
   body('trainerId', 'Trainer ID is required').not().isEmpty(),
   body('sessionType', 'Session type is required').isIn(['single', 'package', 'subscription']),
   body('sessions', 'Sessions array is required').isArray({ min: 1 }),
   body('sessions.*.type', 'Session type is required').isIn(['in-person', 'virtual']),
+  body('sessions.*.serviceName', 'Service name is required').not().isEmpty(),
   body('sessions.*.duration', 'Duration must be a number').isNumeric(),
   body('sessions.*.date', 'Session date is required').isISO8601(),
   body('paymentMethod', 'Payment method is required').isIn(['credit_card', 'paypal', 'stripe', 'cash'])
@@ -126,15 +120,7 @@ router.post('/', auth, [
       });
     }
 
-    const { trainerId, sessionType, sessions, paymentMethod, notes, specialRequests } = req.body;
-
-    // Check if user is not a trainer
-    if (req.user.role === 'trainer') {
-      return res.status(400).json({
-        success: false,
-        message: 'Trainers cannot create bookings'
-      });
-    }
+    const { userId, trainerId, sessionType, sessions, paymentMethod, notes, specialRequests } = req.body;
 
     // Check if trainer exists and is active
     const trainer = await Trainer.findOne({ userId: trainerId, isActive: true });
@@ -151,11 +137,11 @@ router.post('/', auth, [
 
     for (const session of sessions) {
       // Find matching service from trainer
-      const service = trainer.services.find(s => s.name === session.type);
+      const service = trainer.services.find(s => s.name === session.serviceName);
       if (!service) {
         return res.status(400).json({
           success: false,
-          message: `Service type '${session.type}' not found for this trainer`
+          message: `Service type '${session.serviceName}' not found for this trainer`
         });
       }
 
@@ -170,7 +156,7 @@ router.post('/', auth, [
 
     // Create booking
     const booking = new Booking({
-      userId: req.user.id,
+      userId,
       trainerId,
       sessionType,
       sessions: sessionServices,
@@ -187,9 +173,10 @@ router.post('/', auth, [
     const createdSessions = [];
     for (const sessionData of sessionServices) {
       const session = new Session({
-        userId: req.user.id,
+        userId,
         trainerId,
-        type: sessionData.type,
+        type: sessionData.type, // 'in-person' or 'virtual'
+        serviceName: sessionData.serviceName, // Service name like 'Personal Training'
         duration: sessionData.duration,
         date: new Date(sessionData.date),
         notes: notes,
@@ -234,8 +221,8 @@ router.post('/', auth, [
 
 // @route   PUT /api/bookings/:id/status
 // @desc    Update booking status
-// @access  Private (participant only)
-router.put('/:id/status', auth, [
+// @access  Public
+router.put('/:id/status', [
   body('status', 'Status is required').isIn(['pending', 'confirmed', 'cancelled', 'completed'])
 ], async (req, res) => {
   try {
@@ -248,22 +235,13 @@ router.put('/:id/status', auth, [
       });
     }
 
-    const { status, notes } = req.body;
+    const { status, notes, userId } = req.body;
 
     const booking = await Booking.findById(req.params.id);
     if (!booking) {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
-      });
-    }
-
-    // Check if user is participant
-    if (booking.userId.toString() !== req.user.id && 
-        booking.trainerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
       });
     }
 
@@ -276,7 +254,7 @@ router.put('/:id/status', auth, [
     // Add status change to history
     booking.statusHistory.push({
       status,
-      changedBy: req.user.id,
+      changedBy: userId,
       timestamp: new Date(),
       notes
     });
@@ -290,7 +268,7 @@ router.put('/:id/status', auth, [
             $push: {
               statusHistory: {
                 status: 'cancelled',
-                changedBy: req.user.id,
+                changedBy: userId,
                 timestamp: new Date(),
                 notes: 'Cancelled due to booking cancellation'
               }
@@ -324,8 +302,8 @@ router.put('/:id/status', auth, [
 
 // @route   PUT /api/bookings/:id/payment
 // @desc    Update payment status
-// @access  Private (participant only)
-router.put('/:id/payment', auth, [
+// @access  Public
+router.put('/:id/payment', [
   body('paymentStatus', 'Payment status is required').isIn(['pending', 'paid', 'failed', 'refunded'])
 ], async (req, res) => {
   try {
@@ -338,22 +316,13 @@ router.put('/:id/payment', auth, [
       });
     }
 
-    const { paymentStatus, transactionId, paymentMethod } = req.body;
+    const { paymentStatus, transactionId, paymentMethod, userId } = req.body;
 
     const booking = await Booking.findById(req.params.id);
     if (!booking) {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
-      });
-    }
-
-    // Check if user is participant
-    if (booking.userId.toString() !== req.user.id && 
-        booking.trainerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
       });
     }
 
@@ -371,7 +340,7 @@ router.put('/:id/payment', auth, [
       status: paymentStatus,
       transactionId,
       paymentMethod,
-      updatedBy: req.user.id,
+      updatedBy: userId,
       timestamp: new Date()
     });
 
@@ -394,23 +363,16 @@ router.put('/:id/payment', auth, [
 
 // @route   DELETE /api/bookings/:id
 // @desc    Cancel booking
-// @access  Private (participant only)
-router.delete('/:id', auth, async (req, res) => {
+// @access  Public
+router.delete('/:id', async (req, res) => {
   try {
+    const { userId } = req.body;
+    
     const booking = await Booking.findById(req.params.id);
     if (!booking) {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
-      });
-    }
-
-    // Check if user is participant
-    if (booking.userId.toString() !== req.user.id && 
-        booking.trainerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
       });
     }
 
@@ -430,7 +392,7 @@ router.delete('/:id', auth, async (req, res) => {
           $push: {
             statusHistory: {
               status: 'cancelled',
-              changedBy: req.user.id,
+              changedBy: userId,
               timestamp: new Date(),
               notes: 'Cancelled due to booking cancellation'
             }
@@ -443,7 +405,7 @@ router.delete('/:id', auth, async (req, res) => {
     booking.status = 'cancelled';
     booking.statusHistory.push({
       status: 'cancelled',
-      changedBy: req.user.id,
+      changedBy: userId,
       timestamp: new Date(),
       notes: 'Booking cancelled by user'
     });

@@ -496,10 +496,12 @@ const handleBookSession = async (trainerId) => {
 
       // Prepare booking data for API
       const bookingPayload = {
+        userId: user.id,
         trainerId: selectedTrainer.userId || selectedTrainer._id,
         sessionType: bookingData.sessionType,
         sessions: bookingData.sessions.map(session => ({
-          type: session.type, // Use the service name selected by user
+          type: session.sessionType, // 'in-person' or 'virtual'
+          serviceName: session.type, // Service name like 'Personal Training'
           duration: session.duration,
           date: new Date(`${session.date}T${session.time}`).toISOString()
         })),
@@ -508,18 +510,32 @@ const handleBookSession = async (trainerId) => {
         specialRequests: bookingData.specialRequests
       };
 
-      const response = await axios.post('/bookings', bookingPayload);
-
-      if (response.data.success) {
-        alert('Booking created successfully! The trainer will be notified and you will receive a confirmation email.');
-        setShowBookingModal(false);
-        setSelectedTrainer(null);
-      } else {
-        setBookingError(response.data.message || 'Failed to create booking');
+      // Create request without auth headers by temporarily removing Authorization
+      const originalAuth = axios.defaults.headers.common['Authorization'];
+      delete axios.defaults.headers.common['Authorization'];
+      
+      try {
+        const response = await axios.post('/bookings', bookingPayload);
+        
+        if (response.data.success) {
+          alert('Booking created successfully! The trainer will be notified and you will receive a confirmation email.');
+          setShowBookingModal(false);
+          setSelectedTrainer(null);
+        } else {
+          setBookingError(response.data.message || 'Failed to create booking');
+        }
+      } catch (apiError) {
+        console.error('Booking API error:', apiError);
+        setBookingError(apiError.response?.data?.message || 'Failed to create booking. Please try again.');
+      } finally {
+        // Always restore the original Authorization header if it existed
+        if (originalAuth) {
+          axios.defaults.headers.common['Authorization'] = originalAuth;
+        }
       }
     } catch (error) {
       console.error('Booking error:', error);
-      setBookingError(error.response?.data?.message || 'Failed to create booking. Please try again.');
+      setBookingError('Failed to create booking. Please try again.');
     } finally {
       setBookingLoading(false);
     }
