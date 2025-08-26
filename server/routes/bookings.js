@@ -5,8 +5,15 @@ const Session = require('../models/Session');
 const User = require('../models/User');
 const Trainer = require('../models/Trainer');
 const auth = require('../middleware/auth');
+const mongoose = require('mongoose');
+const memoryStore = require('../database/memoryStore');
 
 const router = express.Router();
+
+// Helper function to check if MongoDB is available
+const isDatabaseAvailable = () => {
+  return mongoose.connection.readyState === 1;
+};
 
 // @route   GET /api/bookings
 // @desc    Get user's bookings
@@ -136,98 +143,185 @@ router.post('/', auth, [
       });
     }
 
-    // Check if trainer exists and is active
-    const trainer = await Trainer.findOne({ userId: trainerId, isActive: true });
-    if (!trainer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Trainer not found or inactive'
-      });
-    }
-
-    // Calculate total price
-    let totalPrice = 0;
-    const sessionServices = [];
-
-    for (const session of sessions) {
-      // Find matching service from trainer
-      const service = trainer.services.find(s => s.name === session.type);
-      if (!service) {
-        return res.status(400).json({
+    let booking;
+    
+    if (isDatabaseAvailable()) {
+      // MongoDB is available - use Mongoose models
+      
+      // Check if trainer exists and is active
+      const trainer = await Trainer.findOne({ userId: trainerId, isActive: true });
+      if (!trainer) {
+        return res.status(404).json({
           success: false,
-          message: `Service type '${session.type}' not found for this trainer`
+          message: 'Trainer not found or inactive'
         });
       }
 
-      const sessionPrice = (service.price / 60) * session.duration; // Price per minute
-      totalPrice += sessionPrice;
-      sessionServices.push({
-        ...session,
-        price: sessionPrice,
-        serviceId: service._id
-      });
-    }
+      // Calculate total price
+      let totalPrice = 0;
+      const sessionServices = [];
 
-    // Create booking
-    const booking = new Booking({
-      userId: req.user.id,
-      trainerId,
-      sessionType,
-      sessions: sessionServices,
-      totalPrice,
-      paymentMethod,
-      notes,
-      specialRequests,
-      status: 'pending'
-    });
+      for (const session of sessions) {
+        // Find matching service from trainer
+        const service = trainer.services.find(s => s.name === session.type);
+        if (!service) {
+          return res.status(400).json({
+            success: false,
+            message: `Service type '${session.type}' not found for this trainer`
+          });
+        }
 
-    await booking.save();
+        const sessionPrice = (service.price / 60) * session.duration; // Price per minute
+        totalPrice += sessionPrice;
+        sessionServices.push({
+          ...session,
+          price: sessionPrice,
+          serviceId: service._id
+        });
+      }
 
-    // Create individual sessions
-    const createdSessions = [];
-    for (const sessionData of sessionServices) {
-      const session = new Session({
+      // Create booking with Mongoose
+      booking = new Booking({
         userId: req.user.id,
         trainerId,
-        type: sessionData.type,
-        duration: sessionData.duration,
-        date: new Date(sessionData.date),
-        notes: notes,
-        price: {
-          amount: sessionData.price,
-          currency: 'USD'
-        },
-        status: 'scheduled'
+        sessionType,
+        sessions: sessionServices,
+        totalPrice,
+        paymentMethod,
+        notes,
+        specialRequests,
+        status: 'pending'
       });
 
-      await session.save();
-      createdSessions.push(session);
+      await booking.save();
+
+      // Create individual sessions
+      const createdSessions = [];
+      for (const sessionData of sessionServices) {
+        const session = new Session({
+          userId: req.user.id,
+          trainerId,
+          type: sessionData.type,
+          duration: sessionData.duration,
+          date: new Date(sessionData.date),
+          notes: notes,
+          price: {
+            amount: sessionData.price,
+            currency: 'USD'
+          },
+          status: 'scheduled'
+        });
+
+        await session.save();
+        createdSessions.push(session);
+      }
+
+      // Update booking with session IDs
+      booking.sessions = createdSessions.map(session => ({
+        ...session.toObject(),
+        sessionId: session._id
+      }));
+
+      await booking.save();
+
+      // Populate references
+      await booking.populate('userId', 'name email profileImage');
+      await booking.populate('trainerId', 'name email profileImage');
+      await booking.populate('sessions.sessionId');
+
+    } else {
+      // Use memory store as fallback
+      console.log('🔄 Using memory store for booking creation');
+      
+      // Check if trainer exists in memory store
+      const trainer = memoryStore.findOne('trainers', { userId: trainerId, isActive: true });
+      if (!trainer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Trainer not found or inactive'
+        });
+      }
+
+      // Calculate total price
+      let totalPrice = 0;
+      const sessionServices = [];
+
+      for (const session of sessions) {
+        // Find matching service from trainer
+        const service = trainer.services.find(s => s.name === session.type);
+        if (!service) {
+          return res.status(400).json({
+            success: false,
+            message: `Service type '${session.type}' not found for this trainer`
+          });
+        }
+
+        const sessionPrice = (service.price / 60) * session.duration; // Price per minute
+        totalPrice += sessionPrice;
+        sessionServices.push({
+          ...session,
+          price: sessionPrice,
+          serviceId: service._id
+        });
+      }
+
+      // Create booking in memory store
+      booking = memoryStore.create('bookings', {
+        userId: req.user.id,
+        trainerId,
+        sessionType,
+        sessions: sessionServices,
+        totalPrice,
+        paymentMethod,
+        notes,
+        specialRequests,
+        status: 'pending'
+      });
+
+      // Create individual sessions in memory store
+      const createdSessions = [];
+      for (const sessionData of sessionServices) {
+        const session = memoryStore.create('sessions', {
+          userId: req.user.id,
+          trainerId,
+          type: sessionData.type,
+          duration: sessionData.duration,
+          date: new Date(sessionData.date),
+          notes: notes,
+          price: {
+            amount: sessionData.price,
+            currency: 'USD'
+          },
+          status: 'scheduled'
+        });
+
+        createdSessions.push(session);
+      }
+
+      // Update booking with session IDs
+      booking.sessions = createdSessions.map(session => ({
+        ...session,
+        sessionId: session._id
+      }));
+
+      // Simulate population
+      booking = memoryStore.populate(booking, 'userId', 'name email profileImage');
+      booking = memoryStore.populate(booking, 'trainerId', 'name email profileImage');
     }
-
-    // Update booking with session IDs
-    booking.sessions = createdSessions.map(session => ({
-      ...session.toObject(),
-      sessionId: session._id
-    }));
-
-    await booking.save();
-
-    // Populate references
-    await booking.populate('userId', 'name email profileImage');
-    await booking.populate('trainerId', 'name email profileImage');
-    await booking.populate('sessions.sessionId');
 
     res.status(201).json({
       success: true,
       message: 'Booking created successfully',
-      booking
+      booking,
+      database: isDatabaseAvailable() ? 'MongoDB' : 'Memory Store'
     });
 
   } catch (error) {
     console.error('Create booking error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while creating booking'
+      message: 'Server error while creating booking',
+      error: error.message
     });
   }
 });

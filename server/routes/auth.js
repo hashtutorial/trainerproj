@@ -4,8 +4,15 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const mongoose = require('mongoose');
+const memoryStore = require('../database/memoryStore');
 
 const router = express.Router();
+
+// Helper function to check if MongoDB is available
+const isDatabaseAvailable = () => {
+  return mongoose.connection.readyState === 1;
+};
 
 // @route   POST /api/auth/register
 // @desc    Register a new user
@@ -28,33 +35,65 @@ router.post('/register', [
 
     const { name, email, password, role } = req.body;
 
-    // Check if user already exists
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already exists'
+    let user;
+
+    if (isDatabaseAvailable()) {
+      // MongoDB is available - use Mongoose models
+      
+      // Check if user already exists
+      user = await User.findOne({ email });
+      if (user) {
+        return res.status(400).json({
+          success: false,
+          message: 'User already exists'
+        });
+      }
+
+      // Create new user
+      user = new User({
+        name,
+        email,
+        password,
+        role
+      });
+
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(password, salt);
+
+      await user.save();
+
+    } else {
+      // Use memory store as fallback
+      console.log('🔄 Using memory store for user registration');
+      
+      // Check if user already exists
+      const existingUser = memoryStore.findOne('users', { email });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'User already exists'
+        });
+      }
+
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Create user in memory store
+      user = memoryStore.create('users', {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        isActive: true
       });
     }
-
-    // Create new user
-    user = new User({
-      name,
-      email,
-      password,
-      role
-    });
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
-
-    await user.save();
 
     // Create JWT token
     const payload = {
       user: {
-        id: user.id,
+        id: user.id || user._id,
         role: user.role
       }
     };
@@ -67,10 +106,11 @@ router.post('/register', [
 
     // Remove password from response
     const userResponse = {
-      id: user.id,
+      id: user.id || user._id,
       name: user.name,
       email: user.email,
       role: user.role,
+      isActive: user.isActive,
       createdAt: user.createdAt
     };
 
@@ -78,7 +118,8 @@ router.post('/register', [
       success: true,
       message: 'User registered successfully',
       token,
-      user: userResponse
+      user: userResponse,
+      database: isDatabaseAvailable() ? 'MongoDB' : 'Memory Store'
     });
 
   } catch (error) {
@@ -110,8 +151,17 @@ router.post('/login', [
     const { email, password } = req.body;
     console.log('Login attempt for email:', email);
 
-    // Check if user exists
-    const user = await User.findOne({ email });
+    let user;
+
+    if (isDatabaseAvailable()) {
+      // MongoDB is available - use Mongoose models
+      user = await User.findOne({ email });
+    } else {
+      // Use memory store as fallback
+      console.log('🔄 Using memory store for user login');
+      user = memoryStore.findOne('users', { email });
+    }
+
     if (!user) {
       console.log('User not found for email:', email);
       return res.status(400).json({
@@ -133,7 +183,7 @@ router.post('/login', [
     // Create JWT token
     const payload = {
       user: {
-        id: user.id,
+        id: user.id || user._id,
         role: user.role
       }
     };
@@ -149,10 +199,11 @@ router.post('/login', [
 
     // Remove password from response
     const userResponse = {
-      id: user.id,
+      id: user.id || user._id,
       name: user.name,
       email: user.email,
       role: user.role,
+      isActive: user.isActive,
       createdAt: user.createdAt
     };
 
@@ -162,7 +213,8 @@ router.post('/login', [
       success: true,
       message: 'Login successful',
       token,
-      user: userResponse
+      user: userResponse,
+      database: isDatabaseAvailable() ? 'MongoDB' : 'Memory Store'
     });
 
   } catch (error) {
