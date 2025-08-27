@@ -9,7 +9,7 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 
 // @route   GET /api/bookings
-// @desc    Get user's bookings
+// @desc    Get user's bookings (requires authentication)
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
@@ -60,6 +60,63 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching bookings'
+    });
+  }
+});
+
+// @route   GET /api/bookings/trainer/:trainerId
+// @desc    Get bookings for a specific trainer (no authentication required)
+// @access  Public
+router.get('/trainer/:trainerId', async (req, res) => {
+  try {
+    const { trainerId } = req.params;
+    const { status, page = 1, limit = 10 } = req.query;
+    
+    // Filter by trainer ID - handle both string and ObjectId
+    const mongoose = require('mongoose');
+    let filter = { 
+      $or: [
+        { trainerId: trainerId },
+        { trainerId: mongoose.Types.ObjectId.isValid(trainerId) ? new mongoose.Types.ObjectId(trainerId) : trainerId }
+      ]
+    };
+    
+    // Filter by status
+    if (status) {
+      filter.status = status;
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const bookings = await Booking.find(filter)
+      .populate('userId', 'name email profileImage')
+      .populate('trainerId', 'name email profileImage')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const total = await Booking.countDocuments(filter);
+
+    res.json({
+      success: true,
+      bookings,
+      count: bookings.length,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        totalBookings: total,
+        hasNext: skip + bookings.length < total,
+        hasPrev: parseInt(page) > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('Get trainer bookings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching trainer bookings'
     });
   }
 });
