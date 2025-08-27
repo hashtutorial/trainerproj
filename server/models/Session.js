@@ -2,8 +2,7 @@ const mongoose = require('mongoose');
 
 const SessionSchema = new mongoose.Schema({
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: mongoose.Schema.Types.Mixed, // Allow both ObjectId and string
     required: true
   },
   trainerId: {

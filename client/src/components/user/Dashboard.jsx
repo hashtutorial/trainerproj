@@ -396,7 +396,7 @@ const handleBookSession = async (trainerId) => {
       setSelectedTrainer(trainer);
       const defaultServiceName = trainer.services && trainer.services.length > 0 
         ? trainer.services[0].name 
-        : 'Personal Training';
+        : 'General Training';
 
       setBookingData({
         sessionType: 'single',
@@ -434,7 +434,7 @@ const handleBookSession = async (trainerId) => {
     if (bookingData.sessions.length < 10) { // Limit to 10 sessions
       const defaultServiceName = selectedTrainer.services && selectedTrainer.services.length > 0 
         ? selectedTrainer.services[0].name 
-        : 'Personal Training';
+        : 'General Training';
 
       setBookingData(prev => ({
         ...prev,
@@ -505,7 +505,10 @@ const handleBookSession = async (trainerId) => {
         })),
         paymentMethod: bookingData.paymentMethod,
         notes: bookingData.notes,
-        specialRequests: bookingData.specialRequests
+        specialRequests: bookingData.specialRequests,
+        userId: user._id || user.id || 'guest_user',
+        userName: user.name || 'Guest User',
+        userEmail: user.email || 'guest@example.com'
       };
 
       const response = await axios.post('/bookings', bookingPayload);
@@ -519,7 +522,17 @@ const handleBookSession = async (trainerId) => {
       }
     } catch (error) {
       console.error('Booking error:', error);
-      setBookingError(error.response?.data?.message || 'Failed to create booking. Please try again.');
+      if (error.response?.data?.message) {
+        setBookingError(error.response.data.message);
+      } else if (error.response?.data?.errors) {
+        // Handle validation errors
+        const errorMessages = error.response.data.errors.map(err => err.msg).join(', ');
+        setBookingError(`Validation errors: ${errorMessages}`);
+      } else if (error.message) {
+        setBookingError(error.message);
+      } else {
+        setBookingError('Failed to create booking. Please try again.');
+      }
     } finally {
       setBookingLoading(false);
     }
@@ -923,7 +936,7 @@ const handleBookSession = async (trainerId) => {
                                 </option>
                               ))
                             ) : (
-                              <option value="Personal Training">Personal Training</option>
+                              <option value="General Training">General Training</option>
                             )}
                           </select>
                         </div>
