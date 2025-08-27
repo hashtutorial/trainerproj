@@ -6,8 +6,7 @@ const BookingSchema = new mongoose.Schema({
     required: true
   },
   trainerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: mongoose.Schema.Types.Mixed, // Allow both ObjectId and string for fallback trainers
     required: true
   },
   sessionType: {

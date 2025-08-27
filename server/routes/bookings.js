@@ -143,6 +143,45 @@ router.post('/', [
       trainer = await Trainer.findOne({ userId: trainerId, isActive: true });
     }
     
+    // Handle fallback trainers (when database is not available)
+    if (!trainer && trainerId.startsWith('fallback-')) {
+      // Create a mock trainer object for fallback trainers
+      const fallbackTrainers = {
+        'fallback-1': {
+          userId: { _id: 'fallback-user-1' },
+          services: [{ name: 'Personal Training', price: 85, duration: 60, _id: 'fallback-service-1' }],
+          isActive: true
+        },
+        'fallback-2': {
+          userId: { _id: 'fallback-user-2' },
+          services: [{ name: 'Yoga Session', price: 70, duration: 60, _id: 'fallback-service-2' }],
+          isActive: true
+        },
+        'fallback-3': {
+          userId: { _id: 'fallback-user-3' },
+          services: [{ name: 'CrossFit Training', price: 90, duration: 60, _id: 'fallback-service-3' }],
+          isActive: true
+        },
+        'fallback-4': {
+          userId: { _id: 'fallback-user-4' },
+          services: [{ name: 'Cardio Training', price: 75, duration: 60, _id: 'fallback-service-4' }],
+          isActive: true
+        },
+        'fallback-5': {
+          userId: { _id: 'fallback-user-5' },
+          services: [{ name: 'Bodybuilding Training', price: 95, duration: 60, _id: 'fallback-service-5' }],
+          isActive: true
+        },
+        'fallback-6': {
+          userId: { _id: 'fallback-user-6' },
+          services: [{ name: 'Pilates Session', price: 80, duration: 60, _id: 'fallback-service-6' }],
+          isActive: true
+        }
+      };
+      
+      trainer = fallbackTrainers[trainerId];
+    }
+    
     if (!trainer || !trainer.isActive) {
       return res.status(404).json({
         success: false,
