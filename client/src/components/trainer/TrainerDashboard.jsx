@@ -551,6 +551,37 @@ const TrainerDashboard = ({ user }) => {
                         )}
                       </div>
                       
+                      {/* Sessions Section */}
+                      <div className="booking-sessions">
+                        <h4>Sessions ({formattedBooking.totalSessions})</h4>
+                        <div className="sessions-list">
+                          {formattedBooking.formattedSessions.map((session, index) => (
+                            <div key={session._id || index} className="session-item">
+                              <div className="session-info">
+                                <div className="session-header">
+                                  <span className="session-number">Session {index + 1}</span>
+                                  <span className="session-type">{session.type}</span>
+                                </div>
+                                <div className="session-details">
+                                  <div className="session-detail">
+                                    <span className="detail-label">Date:</span>
+                                    <span className="detail-value">{formatDate(session.date)}</span>
+                                  </div>
+                                  <div className="session-detail">
+                                    <span className="detail-label">Duration:</span>
+                                    <span className="detail-value">{session.duration} minutes</span>
+                                  </div>
+                                  <div className="session-detail">
+                                    <span className="detail-label">Price:</span>
+                                    <span className="detail-value">${session.price?.amount || session.price || 0}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
                       <div className="booking-actions">
                         {formattedBooking.status === 'pending' && (
                           <>
