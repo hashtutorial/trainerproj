@@ -2,13 +2,11 @@ const mongoose = require('mongoose');
 
 const BookingSchema = new mongoose.Schema({
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: mongoose.Schema.Types.Mixed, // Allow both ObjectId and string
     required: true
   },
   trainerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: mongoose.Schema.Types.Mixed, // Allow both ObjectId and string for fallback trainers
     required: true
   },
   sessionType: {
@@ -33,8 +31,18 @@ const BookingSchema = new mongoose.Schema({
       required: true
     },
     price: {
-      type: Number,
-      required: true
+      amount: {
+        type: Number,
+        required: true
+      },
+      currency: {
+        type: String,
+        default: 'USD'
+      },
+      isPaid: {
+        type: Boolean,
+        default: false
+      }
     },
     serviceId: {
       type: mongoose.Schema.Types.ObjectId,

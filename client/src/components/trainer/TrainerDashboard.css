@@ -349,6 +349,18 @@
   color: var(--text-primary);
 }
 
+.client-email {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.booking-type {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
 .session-type {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -403,6 +415,37 @@
 .bookings-header h3 {
   font-size: 1.5rem;
   font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.bookings-summary {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  min-width: 150px;
+}
+
+.summary-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.summary-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .bookings-list {
@@ -508,6 +551,86 @@
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+}
+
+/* Booking Sessions Section */
+.booking-sessions {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.booking-sessions h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.session-item {
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.session-number {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.session-type {
+  background: var(--primary);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.session-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.session-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.session-detail .detail-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.session-detail .detail-value {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Profile Tab */

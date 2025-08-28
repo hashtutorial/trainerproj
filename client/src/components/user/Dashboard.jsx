@@ -36,6 +36,7 @@ const Dashboard = ({ user }) => {
   });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState('');
+  const [isUsingFallbackData, setIsUsingFallbackData] = useState(false);
 
 
 
@@ -289,6 +290,17 @@ const Dashboard = ({ user }) => {
       
       if (response.data && response.data.success && response.data.trainers) {
         const trainersData = response.data.trainers;
+        
+        // Check if we're using fallback data
+        const isUsingFallback = trainersData.some(trainer => trainer._id && trainer._id.startsWith('fallback-'));
+        
+        if (isUsingFallback) {
+          console.log('Using fallback trainer data - some features may be limited');
+          setIsUsingFallbackData(true);
+        } else {
+          setIsUsingFallbackData(false);
+        }
+        
         setTrainers(trainersData);
         
         // Extract unique specializations from trainer data
@@ -396,7 +408,7 @@ const handleBookSession = async (trainerId) => {
       setSelectedTrainer(trainer);
       const defaultServiceName = trainer.services && trainer.services.length > 0 
         ? trainer.services[0].name 
-        : 'Personal Training';
+        : 'General Training';
 
       setBookingData({
         sessionType: 'single',
@@ -434,7 +446,7 @@ const handleBookSession = async (trainerId) => {
     if (bookingData.sessions.length < 10) { // Limit to 10 sessions
       const defaultServiceName = selectedTrainer.services && selectedTrainer.services.length > 0 
         ? selectedTrainer.services[0].name 
-        : 'Personal Training';
+        : 'General Training';
 
       setBookingData(prev => ({
         ...prev,
@@ -505,7 +517,10 @@ const handleBookSession = async (trainerId) => {
         })),
         paymentMethod: bookingData.paymentMethod,
         notes: bookingData.notes,
-        specialRequests: bookingData.specialRequests
+        specialRequests: bookingData.specialRequests,
+        userId: user._id || user.id || 'guest_user',
+        userName: user.name || 'Guest User',
+        userEmail: user.email || 'guest@example.com'
       };
 
       const response = await axios.post('/bookings', bookingPayload);
@@ -519,7 +534,24 @@ const handleBookSession = async (trainerId) => {
       }
     } catch (error) {
       console.error('Booking error:', error);
-      setBookingError(error.response?.data?.message || 'Failed to create booking. Please try again.');
+      if (error.response?.data?.message) {
+        const errorMessage = error.response.data.message;
+        
+        // Check if this is a fallback trainer issue
+        if (selectedTrainer && selectedTrainer._id && selectedTrainer._id.startsWith('fallback-')) {
+          setBookingError('Booking is currently unavailable with demo trainers. Please try again later or contact support.');
+        } else {
+          setBookingError(errorMessage);
+        }
+      } else if (error.response?.data?.errors) {
+        // Handle validation errors
+        const errorMessages = error.response.data.errors.map(err => err.msg).join(', ');
+        setBookingError(`Validation errors: ${errorMessages}`);
+      } else if (error.message) {
+        setBookingError(error.message);
+      } else {
+        setBookingError('Failed to create booking. Please try again.');
+      }
     } finally {
       setBookingLoading(false);
     }
@@ -560,6 +592,21 @@ const handleBookSession = async (trainerId) => {
           </div>
         </div>
       </div>
+
+      {/* Fallback Data Warning */}
+      {isUsingFallbackData && (
+        <div className="fallback-warning" style={{
+          background: '#fff3cd',
+          border: '1px solid #ffeaa7',
+          color: '#856404',
+          padding: '1rem',
+          margin: '1rem 0',
+          borderRadius: '0.5rem',
+          textAlign: 'center'
+        }}>
+          <strong>Demo Mode:</strong> You are viewing demo trainer data. Booking functionality may be limited.
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="search-filters">
@@ -923,7 +970,7 @@ const handleBookSession = async (trainerId) => {
                                 </option>
                               ))
                             ) : (
-                              <option value="Personal Training">Personal Training</option>
+                              <option value="General Training">General Training</option>
                             )}
                           </select>
                         </div>
@@ -1084,9 +1131,12 @@ const handleBookSession = async (trainerId) => {
                 <button
                   type="submit"
                   className="btn-book"
-                  disabled={bookingLoading}
+                  disabled={bookingLoading || (selectedTrainer && selectedTrainer._id && selectedTrainer._id.startsWith('fallback-'))}
                 >
-                  {bookingLoading ? 'Creating Booking...' : `Book Sessions - $${calculateTotalPrice().toFixed(2)}`}
+                  {bookingLoading ? 'Creating Booking...' : 
+                   (selectedTrainer && selectedTrainer._id && selectedTrainer._id.startsWith('fallback-')) ? 
+                   'Demo Mode - Booking Unavailable' : 
+                   `Book Sessions - $${calculateTotalPrice().toFixed(2)}`}
                 </button>
               </div>
             </form>

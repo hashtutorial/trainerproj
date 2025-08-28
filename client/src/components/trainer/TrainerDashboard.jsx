@@ -65,7 +65,9 @@ const TrainerDashboard = ({ user }) => {
 
         // Fetch bookings (only if profile exists)
         try {
-          const bookingsResponse = await axios.get('/bookings');
+          // Use the trainer's ID to fetch their bookings
+          const trainerId = trainerProfile._id || trainerProfile.userId;
+          const bookingsResponse = await axios.get(`/bookings/trainer/${trainerId}`);
           if (bookingsResponse.data && bookingsResponse.data.success && bookingsResponse.data.bookings) {
             setBookings(bookingsResponse.data.bookings);
           }
@@ -197,6 +199,34 @@ const TrainerDashboard = ({ user }) => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const formatBookingData = (booking) => {
+    // Format the booking data for better display
+    const sessions = booking.sessions || [];
+    const totalSessions = sessions.length;
+    const totalPrice = booking.totalPrice || 0;
+    const clientName = booking.userId?.name || 'Unknown Client';
+    const clientEmail = booking.userId?.email || 'No email';
+    const status = booking.status || 'pending';
+    const paymentStatus = booking.paymentStatus || 'pending';
+    const createdAt = new Date(booking.createdAt).toLocaleDateString();
+    const notes = booking.notes || '';
+    const specialRequests = booking.specialRequests || '';
+
+    return {
+      ...booking,
+      formattedSessions: sessions,
+      totalSessions,
+      totalPrice,
+      clientName,
+      clientEmail,
+      status,
+      paymentStatus,
+      createdAt,
+      notes,
+      specialRequests
+    };
   };
 
   if (loading) {
@@ -441,24 +471,41 @@ const TrainerDashboard = ({ user }) => {
               <div className="bookings-tab">
                 <div className="bookings-header">
                   <h3>Client Bookings</h3>
+                  <div className="bookings-summary">
+                    <div className="summary-item">
+                      <span className="summary-label">Total Bookings:</span>
+                      <span className="summary-value">{bookings.length}</span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">Total Revenue:</span>
+                      <span className="summary-value">${bookings.reduce((total, booking) => total + (booking.totalPrice || 0), 0).toFixed(2)}</span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">Pending:</span>
+                      <span className="summary-value">{bookings.filter(b => b.status === 'pending').length}</span>
+                    </div>
+                  </div>
                 </div>
                 
                 <div className="bookings-list">
-                  {bookings.map(booking => (
+                  {bookings.map(booking => {
+                    const formattedBooking = formatBookingData(booking);
+                    return (
                     <div key={booking._id} className="booking-card">
                       <div className="booking-header">
                         <div className="booking-client">
                           <div className="client-avatar">
-                            {booking.userId?.name?.charAt(0).toUpperCase()}
+                            {formattedBooking.clientName.charAt(0).toUpperCase()}
                           </div>
                           <div className="client-info">
-                            <div className="client-name">{booking.userId?.name}</div>
-                            <div className="booking-type">{booking.sessionType}</div>
+                            <div className="client-name">{formattedBooking.clientName}</div>
+                            <div className="client-email">{formattedBooking.clientEmail}</div>
+                            <div className="booking-type">{formattedBooking.sessionType}</div>
                           </div>
                         </div>
                         <div className="booking-status">
-                          <span className={`status-badge ${booking.status}`}>
-                            {booking.status}
+                          <span className={`status-badge ${formattedBooking.status}`}>
+                            {formattedBooking.status}
                           </span>
                         </div>
                       </div>
@@ -467,31 +514,76 @@ const TrainerDashboard = ({ user }) => {
                         <div className="detail-row">
                           <div className="detail-item">
                             <span className="detail-label">Total Sessions:</span>
-                            <span className="detail-value">{booking.sessions?.length || 0}</span>
+                            <span className="detail-value">{formattedBooking.totalSessions}</span>
                           </div>
                           <div className="detail-item">
                             <span className="detail-label">Total Price:</span>
-                            <span className="detail-value">${booking.totalPrice}</span>
+                            <span className="detail-value">${formattedBooking.totalPrice}</span>
                           </div>
                         </div>
                         <div className="detail-row">
                           <div className="detail-item">
                             <span className="detail-label">Payment Status:</span>
-                            <span className={`payment-status ${booking.paymentStatus}`}>
-                              {booking.paymentStatus}
+                            <span className={`payment-status ${formattedBooking.paymentStatus}`}>
+                              {formattedBooking.paymentStatus}
                             </span>
                           </div>
                           <div className="detail-item">
                             <span className="detail-label">Created:</span>
-                            <span className="detail-value">
-                              {new Date(booking.createdAt).toLocaleDateString()}
-                            </span>
+                            <span className="detail-value">{formattedBooking.createdAt}</span>
                           </div>
+                        </div>
+                        {(formattedBooking.notes || formattedBooking.specialRequests) && (
+                          <div className="detail-row">
+                            {formattedBooking.notes && (
+                              <div className="detail-item">
+                                <span className="detail-label">Notes:</span>
+                                <span className="detail-value">{formattedBooking.notes}</span>
+                              </div>
+                            )}
+                            {formattedBooking.specialRequests && (
+                              <div className="detail-item">
+                                <span className="detail-label">Special Requests:</span>
+                                <span className="detail-value">{formattedBooking.specialRequests}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Sessions Section */}
+                      <div className="booking-sessions">
+                        <h4>Sessions ({formattedBooking.totalSessions})</h4>
+                        <div className="sessions-list">
+                          {formattedBooking.formattedSessions.map((session, index) => (
+                            <div key={session._id || index} className="session-item">
+                              <div className="session-info">
+                                <div className="session-header">
+                                  <span className="session-number">Session {index + 1}</span>
+                                  <span className="session-type">{session.type}</span>
+                                </div>
+                                <div className="session-details">
+                                  <div className="session-detail">
+                                    <span className="detail-label">Date:</span>
+                                    <span className="detail-value">{formatDate(session.date)}</span>
+                                  </div>
+                                  <div className="session-detail">
+                                    <span className="detail-label">Duration:</span>
+                                    <span className="detail-value">{session.duration} minutes</span>
+                                  </div>
+                                  <div className="session-detail">
+                                    <span className="detail-label">Price:</span>
+                                    <span className="detail-value">${session.price?.amount || session.price || 0}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                       
                       <div className="booking-actions">
-                        {booking.status === 'pending' && (
+                        {formattedBooking.status === 'pending' && (
                           <>
                             <button className="btn btn-primary btn-small">
                               <span>Confirm</span>
@@ -503,15 +595,20 @@ const TrainerDashboard = ({ user }) => {
                             </button>
                           </>
                         )}
-                        {booking.status === 'confirmed' && (
+                        {formattedBooking.status === 'confirmed' && (
                           <button className="btn btn-success btn-small">
                             <span>View Details</span>
                             <div className="btn-bg"></div>
                           </button>
                         )}
+                        <button className="btn btn-ghost btn-small">
+                          <span>View Sessions</span>
+                          <div className="btn-bg"></div>
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             )}
