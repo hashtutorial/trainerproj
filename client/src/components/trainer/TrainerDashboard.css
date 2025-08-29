@@ -709,6 +709,7 @@
   max-height: 70vh;
   overflow-y: auto;
   padding-right: 1rem;
+  color: black;
 }
 
 .form-section {
@@ -718,6 +719,7 @@
   padding: 2rem;
   border: 1px solid var(--border);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  color:black
 }
 
 .form-section h3 {
@@ -727,6 +729,7 @@
   color: var(--text-primary);
   position: relative;
   padding-bottom: 0.75rem;
+  color: black;
 }
 
 .form-section h3::after {
@@ -743,6 +746,7 @@
 .form-group {
   margin-bottom: 2rem;
   position: relative;
+  color:black
 }
 
 .form-group label {
@@ -752,6 +756,7 @@
   color: var(--text-primary);
   font-size: 0.95rem;
   letter-spacing: 0.025em;
+  color:black;
 }
 
 .form-group label::after {
@@ -788,6 +793,7 @@
   font-weight: 500;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  color: black;
 }
 
 .form-group input:hover,
@@ -804,6 +810,7 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
+  color: black;
 }
 
 .form-group select {
@@ -814,6 +821,7 @@
   background-size: 1.25em 1.25em;
   padding-right: 3rem;
   appearance: none;
+  color:black;
 }
 
 .form-group select option {
@@ -821,12 +829,14 @@
   color: var(--text-primary);
   padding: 0.75rem;
   font-size: 0.95rem;
+  color: black;
 }
 
 .form-group textarea {
   resize: vertical;
   min-height: 100px;
   line-height: 1.6;
+  color: black;
 }
 
 /* Enhanced Specialization Dropdown */

@@ -273,6 +273,7 @@ const Dashboard = ({ user }) => {
           console.log('User profile created successfully');
         } catch (createError) {
           console.error('Error creating user profile:', createError);
+          // Don't show error to user as this is background operation
         }
       } else {
         console.error('Error checking user profile:', error);
@@ -299,11 +300,25 @@ const Dashboard = ({ user }) => {
       }
     } catch (error) {
       console.error('Error fetching trainers:', error);
-      setError('Unable to load trainers. Please try again later.');
       
-      // Fallback to empty state instead of mock data
-      setTrainers([]);
-      setSpecialties([]);
+      // Try fallback endpoint if main endpoint fails
+      try {
+        console.log('Trying fallback trainers endpoint...');
+        const fallbackResponse = await axios.get('/trainers/fallback');
+        if (fallbackResponse.data && fallbackResponse.data.success && fallbackResponse.data.trainers) {
+          setTrainers(fallbackResponse.data.trainers);
+          const uniqueSpecialties = [...new Set(fallbackResponse.data.trainers.map(trainer => trainer.specialization))];
+          setSpecialties(uniqueSpecialties);
+          setError(''); // Clear error if fallback works
+        } else {
+          throw new Error('Fallback also failed');
+        }
+      } catch (fallbackError) {
+        console.error('Fallback endpoint also failed:', fallbackError);
+        setError('Unable to load trainers. Please check your connection and try again.');
+        setTrainers([]);
+        setSpecialties([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -500,12 +515,16 @@ const handleBookSession = async (trainerId) => {
         sessionType: bookingData.sessionType,
         sessions: bookingData.sessions.map(session => ({
           type: session.type, // Use the service name selected by user
+          sessionType: session.sessionType, // 'in-person' or 'virtual'
           duration: session.duration,
           date: new Date(`${session.date}T${session.time}`).toISOString()
         })),
         paymentMethod: bookingData.paymentMethod,
         notes: bookingData.notes,
-        specialRequests: bookingData.specialRequests
+        specialRequests: bookingData.specialRequests,
+        userId: user._id || user.id || 'guest_user',
+        userName: user.name || 'Guest User',
+        userEmail: user.email || 'guest@example.com'
       };
 
       const response = await axios.post('/bookings', bookingPayload);
@@ -519,7 +538,17 @@ const handleBookSession = async (trainerId) => {
       }
     } catch (error) {
       console.error('Booking error:', error);
-      setBookingError(error.response?.data?.message || 'Failed to create booking. Please try again.');
+       if (error.response?.data?.message) {
+        setBookingError(error.response.data.message);
+      } else if (error.response?.data?.errors) {
+        // Handle validation errors
+        const errorMessages = error.response.data.errors.map(err => err.msg).join(', ');
+        setBookingError(`Validation errors: ${errorMessages}`);
+      } else if (error.message) {
+        setBookingError(error.message);
+      } else {
+        setBookingError('Failed to create booking. Please try again.');
+      }
     } finally {
       setBookingLoading(false);
     }
