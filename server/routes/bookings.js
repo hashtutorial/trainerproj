@@ -16,6 +16,8 @@ router.get('/', auth, async (req, res) => {
     const { status, page = 1, limit = 10 } = req.query;
     let filter = {};
 
+    console.log('Fetching bookings for user:', req.user.id, 'Role:', req.user.role);
+
     // Filter by user role
     if (req.user.role === 'trainer') {
       filter.trainerId = req.user.id;
@@ -28,6 +30,8 @@ router.get('/', auth, async (req, res) => {
       filter.status = status;
     }
 
+    console.log('Bookings filter:', filter);
+
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -38,6 +42,8 @@ router.get('/', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
+
+    console.log('Found bookings:', bookings.length);
 
     // Get total count for pagination
     const total = await Booking.countDocuments(filter);

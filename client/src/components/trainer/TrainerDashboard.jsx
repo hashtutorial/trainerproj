@@ -35,11 +35,13 @@ const TrainerDashboard = ({ user }) => {
       setLoading(true);
       
       // First, try to find the trainer profile by user ID
+      let hasProfile = false;
       try {
         const profileResponse = await axios.get(`/trainers/user/${user.id}`);
         if (profileResponse.data && profileResponse.data.success && profileResponse.data.trainer) {
           setTrainerProfile(profileResponse.data.trainer);
           setProfileForm(profileResponse.data.trainer);
+          hasProfile = true;
         } else {
           // No profile exists yet, show the profile creation form
           console.log('No trainer profile found, showing profile creation form');
@@ -51,8 +53,9 @@ const TrainerDashboard = ({ user }) => {
         setShowProfileForm(true);
       }
 
-      // Fetch sessions (only if profile exists)
-      if (trainerProfile) {
+      // Always try to fetch trainer data if user has trainer role
+      if (user.role === 'trainer') {
+        // Fetch sessions
         try {
           const sessionsResponse = await axios.get('/sessions');
           if (sessionsResponse.data && sessionsResponse.data.success && sessionsResponse.data.sessions) {
@@ -63,18 +66,20 @@ const TrainerDashboard = ({ user }) => {
           setSessions([]);
         }
 
-        // Fetch bookings (only if profile exists)
+        // Fetch bookings - This should work for trainers regardless of profile status
         try {
           const bookingsResponse = await axios.get('/bookings');
+          console.log('Bookings response:', bookingsResponse.data);
           if (bookingsResponse.data && bookingsResponse.data.success && bookingsResponse.data.bookings) {
             setBookings(bookingsResponse.data.bookings);
+            console.log('Bookings set:', bookingsResponse.data.bookings);
           }
         } catch (error) {
           console.log('No bookings available yet:', error.message);
           setBookings([]);
         }
 
-        // Fetch stats (only if profile exists)
+        // Fetch stats
         try {
           const statsResponse = await axios.get('/sessions/stats/overview');
           if (statsResponse.data && statsResponse.data.success && statsResponse.data.stats) {
@@ -444,74 +449,85 @@ const TrainerDashboard = ({ user }) => {
                 </div>
                 
                 <div className="bookings-list">
-                  {bookings.map(booking => (
-                    <div key={booking._id} className="booking-card">
-                      <div className="booking-header">
-                        <div className="booking-client">
-                          <div className="client-avatar">
-                            {booking.userId?.name?.charAt(0).toUpperCase()}
+                  {bookings.length > 0 ? (
+                    bookings.map(booking => (
+                      <div key={booking._id} className="booking-card">
+                        <div className="booking-header">
+                          <div className="booking-client">
+                            <div className="client-avatar">
+                              {booking.userId?.name?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div className="client-info">
+                              <div className="client-name">{booking.userId?.name || 'Unknown Client'}</div>
+                              <div className="booking-type">{booking.sessionType}</div>
+                            </div>
                           </div>
-                          <div className="client-info">
-                            <div className="client-name">{booking.userId?.name}</div>
-                            <div className="booking-type">{booking.sessionType}</div>
-                          </div>
-                        </div>
-                        <div className="booking-status">
-                          <span className={`status-badge ${booking.status}`}>
-                            {booking.status}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="booking-details">
-                        <div className="detail-row">
-                          <div className="detail-item">
-                            <span className="detail-label">Total Sessions:</span>
-                            <span className="detail-value">{booking.sessions?.length || 0}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Total Price:</span>
-                            <span className="detail-value">${booking.totalPrice}</span>
-                          </div>
-                        </div>
-                        <div className="detail-row">
-                          <div className="detail-item">
-                            <span className="detail-label">Payment Status:</span>
-                            <span className={`payment-status ${booking.paymentStatus}`}>
-                              {booking.paymentStatus}
-                            </span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Created:</span>
-                            <span className="detail-value">
-                              {new Date(booking.createdAt).toLocaleDateString()}
+                          <div className="booking-status">
+                            <span className={`status-badge ${booking.status}`}>
+                              {booking.status}
                             </span>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="booking-actions">
-                        {booking.status === 'pending' && (
-                          <>
-                            <button className="btn btn-primary btn-small">
-                              <span>Confirm</span>
+                        
+                        <div className="booking-details">
+                          <div className="detail-row">
+                            <div className="detail-item">
+                              <span className="detail-label">Total Sessions:</span>
+                              <span className="detail-value">{booking.sessions?.length || 0}</span>
+                            </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Total Price:</span>
+                              <span className="detail-value">${booking.totalPrice}</span>
+                            </div>
+                          </div>
+                          <div className="detail-row">
+                            <div className="detail-item">
+                              <span className="detail-label">Payment Status:</span>
+                              <span className={`payment-status ${booking.paymentStatus}`}>
+                                {booking.paymentStatus}
+                              </span>
+                            </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Created:</span>
+                              <span className="detail-value">
+                                {new Date(booking.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="booking-actions">
+                          {booking.status === 'pending' && (
+                            <>
+                              <button className="btn btn-primary btn-small">
+                                <span>Confirm</span>
+                                <div className="btn-bg"></div>
+                              </button>
+                              <button className="btn btn-ghost btn-small">
+                                <span>Decline</span>
+                                <div className="btn-bg"></div>
+                              </button>
+                            </>
+                          )}
+                          {booking.status === 'confirmed' && (
+                            <button className="btn btn-success btn-small">
+                              <span>View Details</span>
                               <div className="btn-bg"></div>
                             </button>
-                            <button className="btn btn-ghost btn-small">
-                              <span>Decline</span>
-                              <div className="btn-bg"></div>
-                            </button>
-                          </>
-                        )}
-                        {booking.status === 'confirmed' && (
-                          <button className="btn btn-success btn-small">
-                            <span>View Details</span>
-                            <div className="btn-bg"></div>
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="empty-bookings">
+                      <div className="empty-icon">📅</div>
+                      <h4>No Bookings Yet</h4>
+                      <p>Your client bookings will appear here once they start booking sessions with you.</p>
+                      {!trainerProfile && (
+                        <p className="empty-tip">Complete your trainer profile to start receiving bookings!</p>
+                      )}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             )}
