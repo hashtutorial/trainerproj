@@ -61,30 +61,64 @@ const Dashboard = ({ user }) => {
 
   // Get user's current location
   const getUserLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.warn('Error getting user location:', error);
-          // Default to a central location (you can change this to your city's coordinates)
-          setUserLocation({
-            lat: 40.7128,
-            lng: -74.0060 // New York coordinates as default
-          });
-        }
-      );
-    } else {
-      // Default location if geolocation is not supported
+    console.log('🔍 Requesting user location...');
+    
+    if (!navigator.geolocation) {
+      console.warn('❌ Geolocation is not supported by this browser');
+      setError('Your browser does not support location services. Using default location.');
       setUserLocation({
         lat: 40.7128,
         lng: -74.0060
       });
+      return;
     }
+
+    // Clear any previous errors
+    setError('');
+    console.log('📍 Browser supports geolocation, requesting permission...');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('✅ Location obtained successfully:', position.coords);
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        // Clear any error messages
+        setError('');
+      },
+      (error) => {
+        console.error('❌ Geolocation error:', error);
+        
+        let errorMessage = '';
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = '🚫 Location permission denied. Please click the location icon in your browser\'s address bar to allow location access, then refresh the page.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = '📍 Your location is currently unavailable. Please check your device\'s location settings.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = '⏱️ Location request timed out. Please try again or check your internet connection.';
+            break;
+          default:
+            errorMessage = '❓ Unable to get your location due to an unknown error.';
+        }
+        
+        setError(errorMessage + ' The map will show a default location.');
+        
+        // Use default location
+        setUserLocation({
+          lat: 40.7128,
+          lng: -74.0060
+        });
+      },
+      {
+        enableHighAccuracy: false, // Set to false for faster response
+        timeout: 8000, // 8 second timeout
+        maximumAge: 600000 // 10 minutes cache
+      }
+    );
   };
 
   // Convert address to coordinates (geocoding)
@@ -648,6 +682,29 @@ const handleBookSession = async (trainerId) => {
               Clear Filters
             </button>
 
+            {/* Location Status */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem',
+              background: 'rgba(255, 255, 255, 0.1)',
+              padding: '0.5rem 1rem',
+              borderRadius: '0.5rem',
+              fontSize: '0.85rem'
+            }}>
+              {userLocation ? (
+                <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <MapPin size={14} />
+                  Location detected
+                </span>
+              ) : (
+                <span style={{ color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <MapPin size={14} />
+                  Getting location...
+                </span>
+              )}
+            </div>
+
             {/* Map Toggle */}
             <button
               onClick={() => setShowMap(!showMap)}
@@ -732,20 +789,38 @@ const handleBookSession = async (trainerId) => {
             textAlign: 'center'
           }}>
             <p>{error}</p>
-            <button 
-              onClick={fetchTrainers}
-              style={{
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                padding: '0.5rem 1rem',
-                borderRadius: '0.25rem',
-                cursor: 'pointer',
-                marginTop: '0.5rem'
-              }}
-            >
-              Retry
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.5rem' }}>
+              {error.includes('Location') || error.includes('location') ? (
+                <button 
+                  onClick={getUserLocation}
+                  style={{
+                    background: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.25rem',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  📍 Try Location Again
+                </button>
+              ) : (
+                <button 
+                  onClick={fetchTrainers}
+                  style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.25rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           </div>
         )}
 
